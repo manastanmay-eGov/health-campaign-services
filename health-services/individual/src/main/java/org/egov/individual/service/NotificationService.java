@@ -136,14 +136,23 @@ public class NotificationService {
      * @return
      */
     public String buildMessageForCreate(Map<String, String> userDetailsForSMS, String message) {
-        message = message.replace("{individualName}", userDetailsForSMS.get("individualName"))
-                .replace("{registrationID}", userDetailsForSMS.get("registrationID"));
+        if(message.contains("{individualName}")){
+            message = message.replace("{individualName}", userDetailsForSMS.get("individualName"))
+                    .replace("{registrationID}", userDetailsForSMS.get("registrationID"));
+        }else{
+            message = message.replace("{registrationID}", userDetailsForSMS.get("registrationID"));
+        }
         return message;
     }
 
     public String buildMessageForUpdate(Map<String, String> userDetailsForSMS, String message) {
-        message = message.replace("{individualName}", userDetailsForSMS.get("individualName"))
-                .replace("{wageseekerID}", userDetailsForSMS.get("registrationID"));
+
+        if(message.contains("{individualName}")){
+            message = message.replace("{individualName}", userDetailsForSMS.get("individualName"))
+                    .replace("{wageseekerID}", userDetailsForSMS.get("registrationID"));
+        }else{
+            message = message.replace("{wageseekerID}", userDetailsForSMS.get("registrationID"));
+        }
         return message;
     }
 
