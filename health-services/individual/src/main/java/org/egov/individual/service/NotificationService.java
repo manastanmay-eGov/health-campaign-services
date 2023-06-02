@@ -14,6 +14,7 @@ import org.egov.individual.repository.ServiceRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.egov.individual.web.models.WorksSmsRequest;
 
 import java.util.HashMap;
 import java.util.List;
@@ -61,13 +62,12 @@ public class NotificationService {
         //get individual name, id, mobileNumber
         log.info("get individual name, id, mobileNumber");
         Map<String, String> smsDetails = getDetailsForSMS(request);
+        Map<String, Object> additionalField = setAdditionalFields(request,INDIVIDUAL_CREATE_LOCALIZATION_CODE);
 
         log.info("build Message For CREATE Action");
         message = buildMessageForCreate(smsDetails, message);
-        SMSRequest smsRequest = SMSRequest.builder().mobileNumber(smsDetails.get("mobileNumber")).message(message).build();
-
         log.info("push message for CREATE Action");
-        producer.push(config.getSmsNotifTopic(), smsRequest);
+        checkAdditionalFieldAndPushONSmsTopic(message,additionalField,smsDetails);
     }
 
     private void pushNotificationForUpdate(IndividualRequest request) {
@@ -83,13 +83,12 @@ public class NotificationService {
         //get individual name, id, mobileNumber
         log.info("get project number, location, userDetails");
         Map<String, String> smsDetails = getDetailsForSMS(request);
+        Map<String, Object> additionalField = setAdditionalFields(request,INDIVIDUAL_UPDATE_LOCALIZATION_CODE);
 
         log.info("build Message For UPDATE action to Creator");
         message = buildMessageForUpdate(smsDetails, message);
-        SMSRequest smsRequest = SMSRequest.builder().mobileNumber(smsDetails.get("mobileNumber")).message(message).build();
-
         log.info("push Message For UPDATE action to Creator");
-        producer.push(config.getSmsNotifTopic(), smsRequest);
+        checkAdditionalFieldAndPushONSmsTopic(message,additionalField,smsDetails);
     }
 
     private Map<String, String> getDetailsForSMS(IndividualRequest request) {
@@ -122,10 +121,11 @@ public class NotificationService {
      */
     public String getMessage(IndividualRequest request, String msgCode) {
         String rootTenantId = request.getIndividual().getTenantId().split("\\.")[0];
+        String locale=request.getRequestInfo().getMsgId().split("\\|")[1];
         RequestInfo requestInfo = request.getRequestInfo();
         Map<String, Map<String, String>> localizedMessageMap = getLocalisedMessages(requestInfo, rootTenantId,
-                Constants.INDIVIDUAL_NOTIFICATION_ENG_LOCALE_CODE, Constants.INDIVIDUAL_MODULE_CODE);
-        return localizedMessageMap.get(Constants.INDIVIDUAL_NOTIFICATION_ENG_LOCALE_CODE + "|" + rootTenantId).get(msgCode);
+                locale, Constants.INDIVIDUAL_MODULE_CODE);
+        return localizedMessageMap.get(locale + "|" + rootTenantId).get(msgCode);
     }
 
     /**
@@ -192,6 +192,34 @@ public class NotificationService {
         }
 
         return localizedMessageMap;
+    }
+
+    private Map<String,Object> setAdditionalFields(IndividualRequest request, String localizationCode){
+        Map<String, Object> additionalField=new HashMap<>();
+        String tenantId = request.getIndividual().getTenantId();
+        String rootTenantId = tenantId.split("\\.")[0];
+        if(rootTenantId.equalsIgnoreCase("od")){
+            additionalField.put("templateCode",localizationCode);
+            additionalField.put("requestInfo",request.getRequestInfo());
+            additionalField.put("tenantId",request.getIndividual().getTenantId());
+        }
+        return additionalField;
+    }
+
+    private void checkAdditionalFieldAndPushONSmsTopic( String customizedMessage , Map<String, Object> additionalField,Map<String,String> smsDetails){
+
+
+        if(!additionalField.isEmpty()){
+            WorksSmsRequest smsRequest=WorksSmsRequest.builder().message(customizedMessage).additionalFields(additionalField)
+                    .mobileNumber(smsDetails.get("mobileNumber")).build();
+            log.info("SMS message:::::" + smsRequest.toString());
+            producer.push(config.getMuktaNotificationTopic(), smsRequest);
+
+        }else{
+            SMSRequest smsRequest = SMSRequest.builder().mobileNumber(smsDetails.get("mobileNumber")).message(customizedMessage).build();
+            log.info("SMS message without additional fields:::::" + smsRequest.toString());
+            producer.push(config.getSmsNotifTopic(), smsRequest);
+        }
     }
 
 }
